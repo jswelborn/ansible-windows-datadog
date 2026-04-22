@@ -3,7 +3,7 @@
   hosts: all
   gather_facts: true
   vars_files:
-    - vars/datadog_windows.yaml
+    - vars/datadog.yaml
     - vars/credentials.yaml
 
   tasks:
