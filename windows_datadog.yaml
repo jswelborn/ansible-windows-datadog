@@ -64,7 +64,7 @@
     - name: Verify Datadog Agent is running
       ansible.builtin.fail:
         msg: "Datadog Agent service is not running"
-      when: datadog_agent_service.services[0].state != "running"
+      when: datadog_agent_service.services[0].state | lower not in ["running", "started"]
 
     - name: Show Datadog Agent service status
       ansible.builtin.debug:
