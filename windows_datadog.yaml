@@ -1,0 +1,77 @@
+---
+- name: Install and configure Datadog on Windows
+  hosts: all
+  gather_facts: true
+  vars_files:
+    - vars/datadog_windows.yaml
+    - vars/credentials.yaml
+
+  tasks:
+    - name: Ensure temp directory exists
+      ansible.windows.win_file:
+        path: C:\Temp
+        state: directory
+
+    - name: Download Datadog Agent MSI
+      ansible.windows.win_get_url:
+        url: "{{ datadog_windows_msi_url }}"
+        dest: C:\Temp\datadog-agent.msi
+
+    - name: Install Datadog Agent
+      ansible.windows.win_package:
+        path: C:\Temp\datadog-agent.msi
+        state: present
+        arguments: '/qn APIKEY="{{ datadog_api_key }}" SITE="{{ datadog_site }}"'
+      no_log: true
+
+    - name: Ensure Datadog config directory exists
+      ansible.windows.win_file:
+        path: C:\ProgramData\Datadog
+        state: directory
+
+    - name: Deploy datadog.yaml
+      ansible.windows.win_template:
+        src: windows_datadog.j2
+        dest: C:\ProgramData\Datadog\datadog.yaml
+      no_log: true
+      notify: Restart datadogagent
+
+    - name: Ensure Datadog Agent service is enabled and started
+      ansible.windows.win_service:
+        name: datadogagent
+        start_mode: auto
+        state: started
+
+    - name: Ensure Datadog Process Agent service is enabled and started
+      ansible.windows.win_service:
+        name: datadog-process-agent
+        start_mode: auto
+        state: started
+      failed_when: false
+
+    - name: Ensure Datadog Trace Agent service is enabled and started
+      ansible.windows.win_service:
+        name: datadog-trace-agent
+        start_mode: auto
+        state: started
+      failed_when: false
+
+    - name: Get Datadog Agent service status
+      ansible.windows.win_service_info:
+        name: datadogagent
+      register: datadog_agent_service
+
+    - name: Verify Datadog Agent is running
+      ansible.builtin.fail:
+        msg: "Datadog Agent service is not running"
+      when: datadog_agent_service.services[0].state != "running"
+
+    - name: Show Datadog Agent service status
+      ansible.builtin.debug:
+        msg: "Datadog Agent service is {{ datadog_agent_service.services[0].state }}"
+
+  handlers:
+    - name: Restart datadogagent
+      ansible.windows.win_service:
+        name: datadogagent
+        state: restarted
