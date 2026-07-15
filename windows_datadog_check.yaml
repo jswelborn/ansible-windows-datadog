@@ -1,5 +1,5 @@
 ---
-- name: Check Windows Datadog Agent service
+- name: Check and remediate Windows Datadog Agent service
   hosts: all
   gather_facts: false
 
@@ -10,16 +10,40 @@
     - name: Gather Datadog Agent service info
       ansible.windows.win_service_info:
         name: "{{ service_name }}"
-      register: service_info
+      register: datadog_service_info
+      ignore_unreachable: true
+
+    - name: End compliance check for unreachable host
+      ansible.builtin.meta: end_host
+      when: datadog_service_info is ansible.builtin.unreachable
 
     - name: Fail if Datadog Agent service is missing
       ansible.builtin.fail:
         msg: "Datadog Agent service is missing"
-      when: not service_info.exists
+      when: not datadog_service_info.exists
 
-    - name: Fail if Datadog Agent service is not running
-      ansible.builtin.fail:
-        msg: "Datadog Agent service exists but is not running"
+    - name: Start Datadog Agent service when it is stopped
+      ansible.windows.win_service:
+        name: "{{ service_name }}"
+        state: started
+        start_mode: auto
       when:
-        - service_info.exists
-        - service_info.services[0].state != "started"
+        - datadog_service_info.exists
+        - datadog_service_info.services[0].state != "started"
+
+    - name: Refresh Datadog Agent service info after remediation
+      ansible.windows.win_service_info:
+        name: "{{ service_name }}"
+      register: datadog_remediation_info
+      ignore_unreachable: true
+
+    - name: End compliance check if host became unreachable
+      ansible.builtin.meta: end_host
+      when: datadog_remediation_info is ansible.builtin.unreachable
+
+    - name: Fail if Datadog Agent service is still not running
+      ansible.builtin.fail:
+        msg: "Datadog Agent service exists but could not be started"
+      when:
+        - datadog_remediation_info.exists
+        - datadog_remediation_info.services[0].state != "started"
