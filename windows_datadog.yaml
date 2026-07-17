@@ -19,6 +19,11 @@
       changed_when: false
       no_log: true
 
+    - name: Gather Datadog Agent service information
+      ansible.windows.win_service_info:
+        name: datadogagent
+      register: datadog_existing_service
+
     - name: Gather Windows facts
       ansible.windows.setup:
 
@@ -27,17 +32,20 @@
       ansible.windows.win_file:
         path: C:\Temp
         state: directory
+      when: not datadog_existing_service.exists
 
     - name: Download Datadog Agent MSI
       ansible.windows.win_get_url:
         url: "{{ datadog_windows_msi_url }}"
         dest: C:\Temp\datadog-agent.msi
+      when: not datadog_existing_service.exists
 
     - name: Install Datadog Agent
       ansible.windows.win_package:
         path: C:\Temp\datadog-agent.msi
         state: present
         arguments: '/qn APIKEY="{{ datadog_api_key }}" SITE="{{ datadog_site }}"'
+      when: not datadog_existing_service.exists
       no_log: true
 
     - name: Ensure Datadog config directory exists
@@ -77,10 +85,12 @@
         name: datadogagent
       register: datadog_agent_service
 
-    - name: Verify Datadog Agent is running
+    - name: Verify Datadog Agent exists and is running
       ansible.builtin.fail:
-        msg: "Datadog Agent service is not running"
-      when: datadog_agent_service.services[0].state | lower not in ["running", "started"]
+        msg: "Datadog Agent service is missing or not running"
+      when:
+        - not datadog_agent_service.exists or
+          datadog_agent_service.services[0].state | lower not in ["running", "started"]
 
     - name: Show Datadog Agent service status
       ansible.builtin.debug:
