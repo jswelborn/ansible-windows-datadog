@@ -12,15 +12,19 @@
         name: "{{ service_name }}"
       register: datadog_service_info
       ignore_unreachable: true
+      failed_when: false
 
-    - name: End compliance check for unreachable host
+    - name: End compliance check when service information could not be gathered
       ansible.builtin.meta: end_host
-      when: datadog_service_info is ansible.builtin.unreachable
+      when:
+        - datadog_service_info.unreachable | default(false) or
+          datadog_service_info.failed | default(false)
 
     - name: Fail if Datadog Agent service is missing
       ansible.builtin.fail:
         msg: "Datadog Agent service is missing"
-      when: not datadog_service_info.exists
+      when:
+        - not datadog_service_info.exists | default(false)
 
     - name: Start Datadog Agent service when it is stopped
       ansible.windows.win_service:
@@ -36,14 +40,17 @@
         name: "{{ service_name }}"
       register: datadog_remediation_info
       ignore_unreachable: true
+      failed_when: false
 
-    - name: End compliance check if host became unreachable
+    - name: End compliance check when service information could not be refreshed
       ansible.builtin.meta: end_host
-      when: datadog_remediation_info is ansible.builtin.unreachable
+      when:
+        - datadog_remediation_info.unreachable | default(false) or
+          datadog_remediation_info.failed | default(false)
 
     - name: Fail if Datadog Agent service is still not running
       ansible.builtin.fail:
         msg: "Datadog Agent service exists but could not be started"
       when:
-        - datadog_remediation_info.exists
+        - datadog_remediation_info.exists | default(false)
         - datadog_remediation_info.services[0].state != "started"
